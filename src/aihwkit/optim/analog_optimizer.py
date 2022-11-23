@@ -92,6 +92,10 @@ class AnalogOptimizerMixin:
 
                     # Handle internal analog update.
                     analog_ctx = param
+
+                    # print(analog_ctx.analog_tile.analog_ctx.counter)  # todo remove
+                    # print(analog_ctx.analog_tile.analog_ctx.digital)
+
                     analog_tile = analog_ctx.analog_tile
 
                     if analog_ctx.use_torch_update:
@@ -103,45 +107,59 @@ class AnalogOptimizerMixin:
                         analog_tile.set_learning_rate(learning_rate)
 
                     # Call `update` in the tile.
-                    if not analog_ctx.has_gradient():
+                    if not (analog_ctx.has_gradient() or analog_ctx.gradient is not None): #todo adapt to .gradient possibility
                         # Forward never used.
                         continue
 
-                    if analog_ctx.use_indexed:
-                        for x_input, d_input in zip(analog_ctx.analog_input,
-                                                    analog_ctx.analog_grad_output):
-                            analog_tile.update_indexed(x_input, d_input)
+                    if analog_ctx.gradient is not None:
+                        for i in range(analog_ctx.gradient.shape[1]):
+                            x_input = analog_ctx.gradient[:, i]
+                            d_input = torch.zeros((analog_ctx.gradient.shape[1]))
+                            d_input[i] = 1
+                            analog_tile.update(x_input, d_input)
+                        analog_ctx.gradient = None
+
                     else:
-
-                        import torch  # todo update tile
-                        AGGREGATE_BEFORE_UPDATE = True
-                        a = analog_tile.get_weights()
-                        # print('analog_tile', a)
-                        grad__ = torch.zeros(a[0].T.shape)
-
-                        for x_input, d_input in zip(analog_ctx.analog_input,
-                                                    analog_ctx.analog_grad_output):
-                            grad__ += torch.outer(x_input, d_input)
-                            # x_input = cat(analog_ctx.analog_input,
-                            #               axis=-1 if analog_tile.in_trans else 0)
-                            # d_input = cat(analog_ctx.analog_grad_output,
-                            #               axis=-1 if analog_tile.out_trans else 0)
-                            if not AGGREGATE_BEFORE_UPDATE:
-                                analog_tile.update(x_input, d_input)
-                        if AGGREGATE_BEFORE_UPDATE:
-                            for i in range(grad__.shape[
-                                               1]):  # grad_w_l = sum([torch.outer(analog_input[i], analog_grad_output[i]) for i in range(analog_input.shape[0])])
-                                x_input = grad__[:, i]
-                                d_input = torch.zeros((grad__.shape[1]))
-                                d_input[i] = 1
+                        if analog_ctx.use_indexed:
+                            for x_input, d_input in zip(analog_ctx.analog_input,
+                                                        analog_ctx.analog_grad_output):
+                                analog_tile.update_indexed(x_input, d_input)
+                        else:
+                            x_input = cat(analog_ctx.analog_input,
+                                          axis=-1 if analog_tile.in_trans else 0)
+                            d_input = cat(analog_ctx.analog_grad_output,
+                                          axis=-1 if analog_tile.out_trans else 0)
                             analog_tile.update(x_input, d_input)
 
-                        b = analog_tile.get_weights()
-                        # print('analog_gradient', grad__)
-                        # print('analog_tile_after_update', b)
-                        pass
-
                     analog_ctx.reset()
+
+
+                    # AGGREGATE_BEFORE_UPDATE = True
+                    # a = analog_tile.get_weights()
+                    # # print('analog_tile', a)
+                    # grad__ = torch.zeros(a[0].T.shape)
+                    #
+                    # for x_input, d_input in zip(analog_ctx.analog_input,
+                    #                             analog_ctx.analog_grad_output):
+                    #     grad__ += torch.outer(x_input, d_input)
+                    #     # x_input = cat(analog_ctx.analog_input,
+                    #     #               axis=-1 if analog_tile.in_trans else 0)
+                    #     # d_input = cat(analog_ctx.analog_grad_output,
+                    #     #               axis=-1 if analog_tile.out_trans else 0)
+                    #     if not AGGREGATE_BEFORE_UPDATE:
+                    #         analog_tile.update(x_input, d_input)
+                    # if AGGREGATE_BEFORE_UPDATE:
+                    #     for i in range(grad__.shape[1]):  # grad_w_l = sum([torch.outer(analog_input[i], analog_grad_output[i]) for i in range(analog_input.shape[0])])
+                    #         x_input = grad__[:, i]
+                    #         d_input = torch.zeros((grad__.shape[1]))
+                    #         d_input[i] = 1
+                    #         analog_tile.update(x_input, d_input)
+
+                    # b = analog_tile.get_weights()
+                    # print('analog_gradient', grad__)
+                    # print('analog_tile_after_update', b)
+
+
         # Apply post-update step operations (diffuse, decay, etc).
         # (only here because of unknown params order and shared weights)
         for group in self.param_groups:
