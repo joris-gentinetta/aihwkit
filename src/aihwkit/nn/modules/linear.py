@@ -64,8 +64,7 @@ class AnalogLinear(AnalogModuleBase, Linear):
             bias: bool = True,
             rpu_config: Optional[RPUConfigAlias] = None,
             realistic_read_write: bool = False,
-            weight_scaling_omega: Optional[bool] = None,
-            initial_weights: Optional[Tensor] = None  # added for external initialization # todo can be done  more natively?
+            weight_scaling_omega: Optional[bool] = None
               ):
         # Call super() after tile creation, including ``reset_parameters``.
         Linear.__init__(self, in_features, out_features, bias=bias)
@@ -90,18 +89,13 @@ class AnalogLinear(AnalogModuleBase, Linear):
         self.register_analog_tile(self.analog_tile)
 
         # Set weights from the reset_parameters call
-        if initial_weights is None:
-            self.set_weights(self.weight, self.bias)
-        else:
-            self.set_weights(initial_weights, self.bias, force_exact=True)  # todo
+        self.set_weights(self.weight, self.bias)
 
         # Unregister weight/bias as a parameter but keep it as a
         # field (needed for syncing still)
         self.unregister_parameter('weight')
         if self.analog_bias:
             self.unregister_parameter('bias')
-
-        self.analog_tile.analog_ctx.gradient = None  # to use gradient matrix instead of d_input/d_output vectors # todo
 
     @classmethod
     def from_digital(
