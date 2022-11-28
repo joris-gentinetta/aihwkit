@@ -111,6 +111,8 @@ class AnalogOptimizerMixin:
                         # Forward never used.
                         continue
 
+
+
                     if analog_ctx.gradient is not None:
                         for i in range(analog_ctx.gradient.shape[1]):
                             x_input = analog_ctx.gradient[:, i]
